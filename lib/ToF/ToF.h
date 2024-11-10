@@ -28,7 +28,7 @@ class ToF : public ISchedulerConnectionKit {
                          .init(root, env, list);
     expeditor.assertDescribedArgs();
 
-    _startMeasuring(10, 10 * 1000);
+    _startMeasuring(30, 10 * 1000);
     auto distance = _getMeasuredDistance();
 
     return expeditor.makeInt(distance);
