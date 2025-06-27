@@ -20,59 +20,43 @@ Pixel pixel(LED_COUNT, LED_PIN);
 ToF tof(SDA_PIN, SCL_PIN);
 Vibro vibro(VIBRO_PIN);
 
-auto taskPrintHeap = TaskScheduler::make([](SchedulerTask& self, short t) {
+auto taskPrintHeap = Uniot.createTask("print_time", [](SchedulerTask& self, short t) {
   Serial.print("Free heap: ");
   Serial.println(ESP.getFreeHeap());
 });
 
-auto taskPrintTime = TaskScheduler::make([](SchedulerTask& self, short t) {
+auto taskPrintTime = Uniot.createTask("print_heap", [](SchedulerTask& self, short t) {
   Serial.print("Time: ");
   Serial.println(Date::getFormattedTime());
 });
 
 void setup() {
-  Uniot.begin();
-  PrimitiveExpeditor::getRegisterManager().setDigitalOutput(VIBRO_PIN);
-  PrimitiveExpeditor::getRegisterManager().setDigitalInput(BUTTON_PIN);
+  Uniot.registerLispDigitalOutput(VIBRO_PIN);
+  Uniot.registerLispDigitalInput(BUTTON_PIN);
+  Uniot.configWiFiResetButton(BUTTON_PIN);
+  Uniot.configWiFiStatusLed(INTERNAL_LED_PIN, LOW);
+  Uniot.configWiFiResetOnReboot(5);
 
-  auto& MainAppKit = AppKit::getInstance();
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     return pixel.primitiveSet(root, env, list);
   });
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     return pixel.primitiveClear(root, env, list);
   });
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     return pixel.primitiveShow(root, env, list);
   });
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     return tof.primitive(root, env, list);
   });
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     return vibro.primitive(root, env, list);
   });
-  MainAppKit.configureNetworkController({.pinBtn = BUTTON_PIN,
-                                         .pinLed = INTERNAL_LED_PIN,
-                                         .activeLevelLed = LOW,
-                                         .maxRebootCount = 255});
-  Uniot.getEventBus().registerKit(MainAppKit);
 
-  Uniot.getScheduler()
-      .push(MainAppKit)
-      .push(tof)
-      .push(vibro)
-      .push("print_time", taskPrintTime)
-      .push("print_heap", taskPrintHeap);
+  Uniot.begin();
 
   taskPrintHeap->attach(500);
   taskPrintTime->attach(500);
-
-  MainAppKit.attach();
-  tof.attach();
-  vibro.attach();
-
-  UNIOT_LOG_INFO("%s: %s", "DEVICE_ID", MainAppKit.getCredentials().getDeviceId().c_str());
-  UNIOT_LOG_INFO("%s: %s", "OWNER_ID", MainAppKit.getCredentials().getOwnerId().c_str());
 }
 
 void loop() {

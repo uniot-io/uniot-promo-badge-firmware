@@ -1,21 +1,13 @@
 #pragma once
 
-#include <PrimitiveExpeditor.h>
-#include <TaskScheduler.h>
+#include <Uniot.h>
 
 namespace uniot {
-class Vibro : public ISchedulerConnectionKit {
+class Vibro {
  public:
   Vibro(uint8_t pin, uint32_t period = 70) : mVibroPin(pin), mVibroPeriod(period) {
-    _initTasks();
-  }
-
-  virtual void pushTo(TaskScheduler &scheduler) {
-    scheduler.push("vibro", mTaskVibro);
-  }
-
-  virtual void attach() {
     pinMode(mVibroPin, OUTPUT);
+    _initTasks();
   }
 
   Object primitive(Root root, VarObject env, VarObject list) {
@@ -35,7 +27,7 @@ class Vibro : public ISchedulerConnectionKit {
 
  private:
   void _initTasks() {
-    mTaskVibro = TaskScheduler::make([this](SchedulerTask &self, short t) {
+    mTaskVibro = Uniot.createTask("vibro", [this](SchedulerTask &self, short t) {
       if (!t) {
         digitalWrite(mVibroPin, LOW);
       } else if (t % 2 != 0) {

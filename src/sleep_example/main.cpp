@@ -1,6 +1,3 @@
-#include <AppKit.h>
-#include <Date.h>
-#include <Logger.h>
 #include <Uniot.h>
 #include <esp_sleep.h>
 
@@ -11,24 +8,27 @@
 
 using namespace uniot;
 
-auto taskPrintHeap = TaskScheduler::make([](SchedulerTask& self, short t) {
+auto taskPrintHeap = Uniot.createTask("print_time", [](SchedulerTask& self, short t) {
   Serial.print("Free heap: ");
   Serial.println(ESP.getFreeHeap());
 });
 
-auto taskPrintTime = TaskScheduler::make([](SchedulerTask& self, short t) {
+auto taskPrintTime = Uniot.createTask("print_heap", [](SchedulerTask& self, short t) {
   Serial.print("Time: ");
   Serial.println(Date::getFormattedTime());
 });
 
 void setup() {
-  Uniot.begin();
-  PrimitiveExpeditor::getRegisterManager().setDigitalOutput(VIBRO_PIN, INTERNAL_LED_PIN);
-  PrimitiveExpeditor::getRegisterManager().setAnalogOutput(VIBRO_PIN, INTERNAL_LED_PIN);
-  PrimitiveExpeditor::getRegisterManager().setDigitalInput(BUTTON_PIN);
+  delay(1000);
 
-  auto& MainAppKit = AppKit::getInstance();
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.registerLispDigitalOutput(VIBRO_PIN, INTERNAL_LED_PIN);
+  Uniot.registerLispAnalogOutput(VIBRO_PIN, INTERNAL_LED_PIN);
+  Uniot.registerLispDigitalInput(BUTTON_PIN);
+  Uniot.configWiFiResetButton(BUTTON_PIN);
+  Uniot.configWiFiStatusLed(INTERNAL_LED_PIN, LOW);
+  Uniot.configWiFiResetOnReboot(UINT8_MAX);
+
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     auto expeditor = PrimitiveExpeditor::describe("sleep_setup", Lisp::Bool, 2, Lisp::BoolInt, Lisp::Int)
                          .init(root, env, list);
     expeditor.assertDescribedArgs();
@@ -47,7 +47,7 @@ void setup() {
     return expeditor.makeBool(true);
   });
 
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     auto expeditor = PrimitiveExpeditor::describe("sleep_start", Lisp::Bool, 0)
                          .init(root, env, list);
     expeditor.assertDescribedArgs();
@@ -58,7 +58,7 @@ void setup() {
     return expeditor.makeBool(true);
   });
 
-  MainAppKit.getLisp().pushPrimitive([](Root root, VarObject env, VarObject list) {
+  Uniot.addLispPrimitive([](Root root, VarObject env, VarObject list) {
     auto expeditor = PrimitiveExpeditor::describe("wakeup_cause", Lisp::Int, 0)
                          .init(root, env, list);
     expeditor.assertDescribedArgs();
@@ -82,24 +82,11 @@ void setup() {
     return expeditor.makeInt(0);
   });
 
-  MainAppKit.configureNetworkController({.pinBtn = BUTTON_PIN,
-                                         .pinLed = INTERNAL_LED_PIN,
-                                         .activeLevelLed = LOW,
-                                         .maxRebootCount = 255});
-  Uniot.getEventBus().registerKit(MainAppKit);
-
-  Uniot.getScheduler()
-      .push(MainAppKit)
-      .push("print_time", taskPrintTime)
-      .push("print_heap", taskPrintHeap);
+  Uniot.begin();
+  delay(1000);
 
   taskPrintHeap->attach(500);
   taskPrintTime->attach(500);
-
-  MainAppKit.attach();
-
-  UNIOT_LOG_INFO("%s: %s", "DEVICE_ID", MainAppKit.getCredentials().getDeviceId().c_str());
-  UNIOT_LOG_INFO("%s: %s", "OWNER_ID", MainAppKit.getCredentials().getOwnerId().c_str());
 }
 
 void loop() {

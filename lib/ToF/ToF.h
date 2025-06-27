@@ -1,26 +1,15 @@
 #pragma once
 
 #include <Adafruit_VL53L0X.h>
-#include <LimitedQueue.h>
-#include <PrimitiveExpeditor.h>
-#include <TaskScheduler.h>
+#include <Uniot.h>
 
 namespace uniot {
-class ToF : public ISchedulerConnectionKit {
+class ToF {
  public:
   ToF(int sda, int scl) : mInitialized(false) {
     Wire.setPins(sda, scl);
     mFilterBuffer.limit(5);
     _initTasks();
-  }
-
-  virtual void pushTo(TaskScheduler &scheduler) {
-    scheduler.push("tof_measure", mTaskMeasure);
-    scheduler.push("tof_stop_measure", mTaskStopMeasuring);
-  }
-
-  virtual void attach() {
-    mInitialized = mLox.begin();
   }
 
   Object primitive(Root root, VarObject env, VarObject list) {
@@ -36,29 +25,31 @@ class ToF : public ISchedulerConnectionKit {
 
  private:
   void _initTasks() {
-    mTaskMeasure = TaskScheduler::make([this](SchedulerTask &self, short t) {
+    mTaskMeasure = Uniot.createTask("tof_measure", [this](SchedulerTask &self, short t) {
       auto distance = _getDistance();
       if (distance > 0) {
         mFilterBuffer.pushLimited(distance);
       }
     });
-    mTaskStopMeasuring = TaskScheduler::make([this](SchedulerTask &self, short t) {
+    mTaskStopMeasuring = Uniot.createTask("tof_stop_measure", [this](SchedulerTask &self, short t) {
       mTaskMeasure->detach();
       mFilterBuffer.clean();
     });
   }
 
-  bool _startMeasuring(uint32_t intervalMs, uint32_t durationMs) {
+  bool _initialize() {
     if (!mInitialized) {
-      return false;
+      mInitialized = mLox.begin();
     }
 
+    return mInitialized;
+  }
+
+  void _startMeasuring(uint32_t intervalMs, uint32_t durationMs) {
     if (!mTaskMeasure->isAttached()) {
       mTaskMeasure->attach(intervalMs);
     }
     mTaskStopMeasuring->once(durationMs);
-
-    return true;
   }
 
   uint16_t _getMeasuredDistance() {
@@ -75,7 +66,7 @@ class ToF : public ISchedulerConnectionKit {
   }
 
   int32_t _getDistance() {
-    if (!mInitialized) {
+    if (!_initialize()) {
       return -1;
     }
 
