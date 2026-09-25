@@ -1,2 +1,6 @@
 .pio
 .vscode
+dist/
+site/
+releases/
+notes.md

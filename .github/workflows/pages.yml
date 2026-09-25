@@ -1,0 +1,81 @@
+name: Firmware site
+
+# Publishes every release's images and versions.json to this repo's GitHub Pages, where
+# uniot-web-installer fetches them. Runs after each release; run it by hand to rebuild the site
+# without releasing.
+on:
+  workflow_call:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+env:
+  # Where uniot-web-installer loads firmware from -- its VITE_FIRMWARE_BASE_URL. If this site
+  # ever moves (a custom domain on this repo, an org site with one, a rename), GitHub answers
+  # the old address with a redirect that carries no CORS header: every download in the
+  # installer fails while curl still works. The last step turns that into a failed deploy.
+  FIRMWARE_BASE_URL: https://uniot-io.github.io/uniot-promo-badge-firmware/
+
+jobs:
+  deploy:
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      # Downloaded on the runner, where CORS does not apply -- the browser can't fetch release
+      # assets directly, which is why this site exists.
+      - name: Download every release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          mkdir releases
+          for tag in $(gh release list --exclude-drafts --limit 1000 --json tagName --jq '.[].tagName'); do
+            gh release download "$tag" --dir "releases/$tag" --pattern 'release.json' --pattern '*.bin'
+          done
+
+      - name: Assemble the site
+        run: python3 .github/scripts/build_site.py releases site "$GITHUB_SERVER_URL/$GITHUB_REPOSITORY"
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - id: deployment
+        uses: actions/deploy-pages@v4
+
+      - name: Check the installer can still reach this site
+        env:
+          PAGE_URL: ${{ steps.deployment.outputs.page_url }}
+        run: |
+          if [ "${PAGE_URL%/}" != "${FIRMWARE_BASE_URL%/}" ]; then
+            echo "::error::The site deployed to $PAGE_URL, but uniot-web-installer loads firmware from $FIRMWARE_BASE_URL. Update VITE_FIRMWARE_BASE_URL there and FIRMWARE_BASE_URL here."
+            exit 1
+          fi
+
+          # A direct 200 with Access-Control-Allow-Origin, and no redirect -- the browser needs
+          # the CORS header on every hop, and GitHub's redirects don't carry it.
+          url="${FIRMWARE_BASE_URL%/}/versions.json"
+          for attempt in 1 2 3 4 5 6; do
+            headers=$(curl -s -o /dev/null -D - -H "Origin: https://install.uniot.io" "$url")
+            status=$(echo "$headers" | head -1 | awk '{ print $2 }')
+            if [ "$status" = "200" ] && echo "$headers" | grep -qi '^access-control-allow-origin:'; then
+              echo "$url answers 200 with CORS"
+              exit 0
+            fi
+            echo "attempt $attempt: HTTP $status, waiting for the deploy to propagate"
+            sleep 10
+          done
+          echo "::error::$url did not answer 200 with Access-Control-Allow-Origin, so the installer cannot load firmware from it."
+          exit 1
