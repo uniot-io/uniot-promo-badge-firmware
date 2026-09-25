@@ -1,7 +1,7 @@
 #include <AppKit.h>
-#include <Date.h>
 #include <Logger.h>
 #include <Pixel.h>
+#include <SerialIdentity.h>
 #include <ToF.h>
 #include <Uniot.h>
 #include <Vibro.h>
@@ -19,7 +19,7 @@
 #define BADGE_VERSION "dev"
 #endif
 
-// Taken from the flag itself rather than set separately, so the banner cannot claim a
+// Taken from the flag itself rather than set separately, so the identity line cannot claim a
 // variant the build does not have.
 #ifdef ENABLE_LOWER_WIFI_TX_POWER
 #define BADGE_VARIANT "compatible"
@@ -27,23 +27,12 @@
 #define BADGE_VARIANT "full-range"
 #endif
 
-#define SEMVER_PARTS(v) (v) / 10000, (v) / 100 % 100, (v) % 100
-
 using namespace uniot;
 
 Pixel pixel(LED_COUNT, LED_PIN);
 ToF tof(SDA_PIN, SCL_PIN);
 Vibro vibro(VIBRO_PIN);
-
-auto taskPrintHeap = Uniot.createTask("print_time", [](SchedulerTask& self, short t) {
-  Serial.print("Free heap: ");
-  Serial.println(ESP.getFreeHeap());
-});
-
-auto taskPrintTime = Uniot.createTask("print_heap", [](SchedulerTask& self, short t) {
-  Serial.print("Time: ");
-  Serial.println(Date::getFormattedTime());
-});
+SerialIdentity identity("badge", BADGE_VERSION, BADGE_VARIANT);
 
 void setup() {
   Uniot.registerLispDigitalOutput(VIBRO_PIN);
@@ -69,19 +58,7 @@ void setup() {
   });
 
   Uniot.begin();
-
-  // One machine-readable line naming this firmware, at every boot. The web installer resets
-  // the badge and looks for it, to tell an update from a new install and to keep the radio
-  // variant the badge already has. Written to Serial directly, not through the logger, so no
-  // log level can filter it out.
-  Serial.printf("UNIOT-BADGE version=%s core=%d.%d.%d lisp=%d.%d.%d variant=%s\n",
-                BADGE_VERSION,
-                SEMVER_PARTS(UNIOT_CORE_VERSION),
-                SEMVER_PARTS(LISP_VERSION),
-                BADGE_VARIANT);
-
-  taskPrintHeap->attach(500);
-  taskPrintTime->attach(500);
+  identity.begin();
 }
 
 void loop() {

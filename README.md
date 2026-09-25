@@ -120,12 +120,15 @@ ship with. `uniot_app_full_range` keeps full power, for a module whose radio cop
 never connects, flash `uniot_app` instead. Switching keeps your WiFi settings, identity and
 script.
 
-Both print one line at boot that names the build, which is how the web installer tells what a
-badge is running:
+Both name themselves in one line — at boot, and whenever `UNIOT?` arrives on the serial
+port. That's how the web installer tells what a badge is running:
 
 ```
-UNIOT-BADGE version=0.4.0 core=0.9.0 lisp=0.4.0 variant=compatible
+UNIOT device=badge version=0.4.0 core=0.9.0 lisp=0.4.0 variant=compatible
 ```
+
+To ask by hand, open `pio device monitor`, type `UNIOT?` and press Enter — nothing echoes as
+you type, but the answer does.
 
 `factory_test` is the fastest way to tell working hardware from a bad solder joint: it sweeps
 the ring, buzzes, then tries the sensor. If the sensor answers, the ring tracks your hand as a
