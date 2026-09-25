@@ -104,12 +104,27 @@ A [PlatformIO](https://platformio.org/) project with three environments:
 | Environment | What it is |
 | --- | --- |
 | `uniot_app` | The badge firmware — this is the one you want |
+| `uniot_app_full_range` | The same, at full WiFi transmit power — see below |
 | `factory_test` | Assembly check, no account needed — see below |
 | `uniot_sleep_example` | Deep sleep with wake-on-button, kept as a reference |
 
 ```bash
 pio run -e uniot_app -t upload
 pio device monitor
+```
+
+**Why two radio builds.** Some ESP32-C3 modules can't hold a WiFi connection at the chip's
+full transmit power, and nothing on the board tells them apart. `uniot_app` transmits at
+8.5 dBm instead of 19.5, which works on every module at a shorter range; it's what badges
+ship with. `uniot_app_full_range` keeps full power, for a module whose radio copes — if it
+never connects, flash `uniot_app` instead. Switching keeps your WiFi settings, identity and
+script.
+
+Both print one line at boot that names the build, which is how the web installer tells what a
+badge is running:
+
+```
+UNIOT-BADGE version=0.4.0 core=0.9.0 lisp=0.4.0 variant=compatible
 ```
 
 `factory_test` is the fastest way to tell working hardware from a bad solder joint: it sweeps
