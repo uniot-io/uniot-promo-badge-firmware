@@ -12,6 +12,9 @@ which carries a small Lisp interpreter, so its behaviour is a script you write i
 and deploy over the air — no cable, no reflashing, and the badge keeps the script across
 reboots.
 
+The firmware itself installs and updates from a browser, too: plug the badge in and open
+**[install.uniot.io](https://install.uniot.io)**.
+
 ## Start with the QR code
 
 On the back of the badge is a QR code with a promo code behind it. Activating it puts the
@@ -97,44 +100,74 @@ centimetres.
 In a script, `push_event` sends a value up to the dashboard; `is_event` and `pop_event` read
 what came down.
 
-## Flashing it yourself
+## Installing the firmware
 
-A [PlatformIO](https://platformio.org/) project with three environments:
+### In your browser
 
-| Environment | What it is |
-| --- | --- |
-| `uniot_app` | The badge firmware — this is the one you want |
-| `uniot_app_full_range` | The same, at full WiFi transmit power — see below |
-| `factory_test` | Assembly check, no account needed — see below |
-| `uniot_sleep_example` | Deep sleep with wake-on-button, kept as a reference |
+Open **[install.uniot.io](https://install.uniot.io)** in desktop Chrome, Edge or Opera, plug
+the badge in with a USB-C cable, and press *Connect*. The page shows which firmware the badge
+is running and which is available, installs or updates it, and checks afterwards that the new
+version started. Nothing to install on your computer.
+
+An update keeps the badge's WiFi settings, identity and script. Erasing is there if you want
+it, but only if you tick it. A serial console under the page shows the badge's log while it
+works, and *Test the hardware instead* installs the hardware test described below.
+
+### From a release
+
+Every [release](https://github.com/uniot-io/uniot-promo-badge-firmware/releases) carries one
+image per build, merged so it goes on at offset 0:
+
+```bash
+esptool.py --chip esp32c3 write_flash 0x0 compatible.bin
+```
+
+Without an erase, this also keeps the badge's settings.
+
+### From source
+
+A [PlatformIO](https://platformio.org/) project:
+
+| Environment | Release image | What it is |
+| --- | --- | --- |
+| `uniot_app` | `compatible.bin` | The badge firmware — this is the one you want |
+| `uniot_app_full_range` | `full-range.bin` | The same, at full WiFi transmit power — see below |
+| `factory_test` | `hardware-test.bin` | Assembly check, no account needed — see below |
+| `uniot_sleep_example` | — | Deep sleep with wake-on-button, kept as a reference |
 
 ```bash
 pio run -e uniot_app -t upload
 pio device monitor
 ```
 
-**Why two radio builds.** Some ESP32-C3 modules can't hold a WiFi connection at the chip's
-full transmit power, and nothing on the board tells them apart. `uniot_app` transmits at
-8.5 dBm instead of 19.5, which works on every module at a shorter range; it's what badges
-ship with. `uniot_app_full_range` keeps full power, for a module whose radio copes — if it
-never connects, flash `uniot_app` instead. Switching keeps your WiFi settings, identity and
-script.
+### Which radio build
 
-Both name themselves in one line — at boot, and whenever `UNIOT?` arrives on the serial
-port. That's how the web installer tells what a badge is running:
+Some ESP32-C3 modules can't hold a WiFi connection at the chip's full transmit power, and
+nothing on the board tells them apart. *Compatible* transmits at 8.5 dBm instead of 19.5,
+which works on every module at a shorter range; it's what badges ship with. *Full range*
+keeps full power, for a module whose radio copes — if it never connects, install
+*Compatible* instead. Switching keeps your WiFi settings, identity and script.
+
+### The hardware test
+
+The fastest way to tell working hardware from a bad solder joint: it sweeps the ring, buzzes,
+then tries the sensor. If the sensor answers, the ring tracks your hand as a red arc — all
+red closer than 40 mm, all blue past 360 mm; if it doesn't, a red dot chases around the ring
+instead. The button drives the motor throughout, so all four peripherals are covered without
+a network or an account. Install the firmware again afterwards; the badge keeps its settings.
+
+### How a badge says what it's running
+
+The firmware names itself in one line — at boot, and whenever `UNIOT?` arrives on the serial
+port. That's how the installer tells an update from a new install, and which radio build a
+badge already has:
 
 ```
-UNIOT device=badge version=0.4.0 core=0.9.0 lisp=0.4.0 variant=compatible
+UNIOT device=badge version=1.0.0 core=0.9.0 lisp=0.4.0 variant=compatible
 ```
 
 To ask by hand, open `pio device monitor`, type `UNIOT?` and press Enter — nothing echoes as
 you type, but the answer does.
-
-`factory_test` is the fastest way to tell working hardware from a bad solder joint: it sweeps
-the ring, buzzes, then tries the sensor. If the sensor answers, the ring tracks your hand as a
-red arc — all red closer than 40 mm, all blue past 360 mm; if it doesn't, a red dot chases
-around the ring instead. The button drives the motor throughout, so all four peripherals are
-covered without a network or an account.
 
 ## Building one without a badge
 
@@ -163,6 +196,11 @@ firmware follows from them. Three things the board handles for you that a breadb
 
 The button can be any pin that survives boot: `configWiFiResetButton` chooses the internal pull
 from the active level, so no external resistor is needed.
+
+The [web installer](https://install.uniot.io) works for your build too, as long as it uses the
+badge's pins: it installs the released images, and those have the pins built in. It finds
+boards with the USB-serial chips common on ESP32 development boards, not only the C3's own
+USB. If you moved any pins, build [from source](#from-source) instead.
 
 ## First run
 
